@@ -5,14 +5,33 @@ Checkpoint 2 — Output Guardrails
   - LLM-as-Judge                          ← optional (không chấm)
 """
 import re
-import textwrap
 
 from google.genai import types
-from google.adk.agents import llm_agent
 from google.adk import runners
 from google.adk.plugins import base_plugin
 
+from core.config import DEMO_SECRETS
 from core.utils import chat_with_agent
+
+_REDACTION = "[REDACTED]"
+_PII_PATTERNS = (
+    ("api_key", re.compile(r"\b(?:sk-|liquid_|AIza)[a-z0-9_-]+", re.IGNORECASE)),
+    ("password", re.compile(
+        r"\b(?:password|mật khẩu)\s*(?:[:=]\s*|(?:is|là)\s+)"
+        r"(?:\"[^\"\r\n]+\"|'[^'\r\n]+'|`[^`\r\n]+`|[^\s,;]+)",
+        re.IGNORECASE,
+    )),
+    ("email", re.compile(r"[\w.+-]+@[\w.-]+\.[a-z]{2,}\b", re.IGNORECASE)),
+    ("national_id", re.compile(r"\b(?:[0-9]{12}|[0-9]{9})\b")),
+    ("phone", re.compile(r"(?<!\w)(?:0|\+84[ .-]?)(?:[0-9][ .-]?){8,9}[0-9](?!\w)")),
+)
+_DEMO_SECRET_PATTERNS = tuple(
+    re.compile(
+        re.escape(secret) + (r"(?::[0-9]+)?" if "." in secret else ""),
+        re.IGNORECASE,
+    )
+    for secret in sorted(DEMO_SECRETS, key=len, reverse=True)
+)
 
 
 # ============================================================
@@ -28,7 +47,7 @@ from core.utils import chat_with_agent
 # ============================================================
 
 def content_filter(response: str) -> dict:
-    """Filter response for PII, secrets, and harmful content.
+    """Filter response for PII and secrets.
 
     Args:
         response: The LLM's response text
@@ -39,21 +58,14 @@ def content_filter(response: str) -> dict:
     issues = []
     redacted = response
 
-    # PII patterns to check
-    PII_PATTERNS = {
-        # TODO: Add regex patterns for:
-        # - VN phone number: r"0\d{9,10}"
-        # - Email: r"[\w.-]+@[\w.-]+\.[a-zA-Z]{2,}"
-        # - National ID (CMND/CCCD): r"\b\d{9}\b|\b\d{12}\b"
-        # - API key pattern: r"sk-[a-zA-Z0-9-]+"
-        # - Password pattern: r"password\s*[:=]\s*\S+"
-    }
-
-    for name, pattern in PII_PATTERNS.items():
-        matches = re.findall(pattern, response, re.IGNORECASE)
-        if matches:
-            issues.append(f"{name}: {len(matches)} found")
-            redacted = re.sub(pattern, "[REDACTED]", redacted, flags=re.IGNORECASE)
+    for name, pattern in _PII_PATTERNS:
+        redacted, count = pattern.subn(_REDACTION, redacted)
+        if count:
+            issues.append(f"{name}: {count} found")
+    for pattern in _DEMO_SECRET_PATTERNS:
+        redacted, count = pattern.subn(_REDACTION, redacted)
+        if count:
+            issues.append(f"secret: {count} found")
 
     return {
         "safe": len(issues) == 0,
@@ -154,7 +166,7 @@ class OutputGuardrailPlugin(base_plugin.BasePlugin):
         """Extract text from LLM response."""
         text = ""
         if hasattr(llm_response, "content") and llm_response.content:
-            for part in llm_response.content.parts:
+            for part in llm_response.content.parts or []:
                 if hasattr(part, "text") and part.text:
                     text += part.text
         return text
@@ -170,18 +182,22 @@ class OutputGuardrailPlugin(base_plugin.BasePlugin):
 
         response_text = self._extract_text(llm_response)
         if not response_text:
-            return llm_response
+            return None
 
-        # TODO: Implement logic:
-        # 1. Call content_filter(response_text)
-        #    - If issues found: replace llm_response.content with redacted version
-        #    - Increment self.redacted_count
-        # 2. If use_llm_judge: call llm_safety_check(response_text)
-        #    - If unsafe: replace llm_response.content with a safe message
-        #    - Increment self.blocked_count
-        # 3. Return llm_response (possibly modified)
+        result = content_filter(response_text)
+        filtered = result["redacted"]
+        if not result["safe"]:
+            self.redacted_count += 1
+        if self.use_llm_judge and not (await llm_safety_check(filtered))["safe"]:
+            self.blocked_count += 1
+            filtered = "Response blocked by output guardrail."
+        if filtered == response_text:
+            return None
 
-        return llm_response  # TODO: modify if needed
+        llm_response.content = types.Content(
+            role="model", parts=[types.Part.from_text(text=filtered)]
+        )
+        return llm_response
 
 
 # ============================================================

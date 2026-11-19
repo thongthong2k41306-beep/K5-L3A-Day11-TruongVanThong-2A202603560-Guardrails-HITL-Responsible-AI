@@ -97,7 +97,7 @@ CP1 Setup → CP2 Viết bộ lọc → CP3 Ghép pipeline + sinh results.json
 
 ### Mục tiêu
 
-Máy chạy được Python lab + có key **OpenRouter** (Blue) và key **OpenAI hoặc Gemini** (Red).
+Máy chạy được Python lab + có key **Liquid** (Blue) và key **OpenAI hoặc Gemini** (Red).
 
 ### Việc cần làm (từng bước)
 
@@ -107,7 +107,7 @@ Máy chạy được Python lab + có key **OpenRouter** (Blue) và key **OpenAI
 2. Clone repo (đã đổi tên) về máy; mở terminal tại **thư mục gốc** repo.
 3. Tạo & kích hoạt virtualenv, cài dependency.
 4. Copy `.env.example` → `.env`:
-  - **Blue (cố định):** `OPENROUTER_API_KEY` — model khóa `liquid/lfm-3-1.7b:free`
+  - **Blue (cố định):** `LIQUID_API_KEY` — model khóa `lfm3-1.7b`
   - **Red (chọn một):** `RED_TEAM_PROVIDER=openai` + `OPENAI_API_KEY` (`gpt-4o-mini`)  
     **hoặc** `RED_TEAM_PROVIDER=gemini` + `GOOGLE_API_KEY` (`gemini-3.5-flash`)
 5. (Tuỳ chọn) Model khó khi săn bonus: `OPENAI_MODEL=gpt-5.6-luna` hoặc `GEMINI_MODEL=gemini-3.8-flash` — **không** đổi tên agent.
@@ -119,7 +119,7 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 # Nếu bị chặn: Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 Copy-Item .env.example .env
-# Điền OPENROUTER_API_KEY + (OPENAI_API_KEY hoặc GOOGLE_API_KEY)
+# Điền LIQUID_API_KEY + (OPENAI_API_KEY hoặc GOOGLE_API_KEY)
 python -m pip install -U pip
 pip install -r requirements.txt
 ```
@@ -130,7 +130,7 @@ pip install -r requirements.txt
 python3 -m venv .venv
 source .venv/bin/activate
 cp .env.example .env
-# Điền OPENROUTER_API_KEY + (OPENAI_API_KEY hoặc GOOGLE_API_KEY)
+# Điền LIQUID_API_KEY + (OPENAI_API_KEY hoặc GOOGLE_API_KEY)
 python -m pip install -U pip
 pip install -r requirements.txt
 ```
@@ -140,7 +140,7 @@ pip install -r requirements.txt
 ### Cần hiểu gì?
 
 - Lab chạy **local**.  
-  **Blue** luôn dùng OpenRouter `liquid/lfm-3-1.7b:free`.  
+  **Blue** luôn dùng Liquid `lfm3-1.7b`.
   **Red** + **Red Advance** cùng provider: `gpt-4o-mini` hoặc `gemini-3.5-flash`.  
   Bonus: chọn **một** — leak **Red** tối đa +5 **hoặc** leak **Red Advance** tối đa +10 (**không** cộng cả hai).
 - **Red** cố ý “mềm”; **Red Advance** vẫn cứng: regex **+ NVIDIA NeMo Guardrails** (thư viện `nemoguardrails`, đã có trong `requirements.txt` — thiếu thì Red Advance báo lỗi, không tự lùi về regex).
@@ -164,7 +164,7 @@ pip install -r requirements.txt
 
 ```bash
 # Blue SDK (Windows / macOS / Linux — sau khi đã Activate venv)
-python -c "import openai; print('OpenAI SDK (OpenRouter Blue + OpenAI Red) sẵn sàng')"
+python -c "import openai; print('OpenAI SDK (Liquid Blue + OpenAI Red) sẵn sàng')"
 # Nếu Red/Red Advance = gemini, kiểm tra thêm:
 # python -c "import google.adk; print('Gemini/ADK sẵn sàng')"
 # Red Advance bắt buộc NeMo Guardrails:
@@ -560,7 +560,7 @@ Get-ChildItem .\outputs\*attack*.json
 ls outputs/*attack*.json
 ```
 
-> Cần `OPENROUTER_API_KEY` (Blue) + key Red (`OPENAI_API_KEY` hoặc `GOOGLE_API_KEY`) — lệnh tấn công gọi LLM.  
+> Cần `LIQUID_API_KEY` (Blue) + key Red (`OPENAI_API_KEY` hoặc `GOOGLE_API_KEY`) — lệnh tấn công gọi LLM.
 > **Pass Signal:** 3 file `*attack*` xuất hiện; mở `attack_results.json` thấy `unsafe_attacks` (= default) và `guards_attacks` (= advance).
 
 Demo nhanh (optional): từ gốc repo  

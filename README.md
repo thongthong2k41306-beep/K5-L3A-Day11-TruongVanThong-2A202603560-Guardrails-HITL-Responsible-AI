@@ -23,7 +23,7 @@
 1. Máy có **Python 3.10+** (khuyến nghị 3.11 hoặc 3.12) và Git.
 2. Tài khoản GitHub cá nhân (để fork + đổi tên repo nộp).
 3. API keys:
-   - **Blue (bắt buộc):** [OpenRouter](https://openrouter.ai/keys) — model cố định [`liquid/lfm-3-1.7b:free`](https://openrouter.ai/liquid/lfm-3-1.7b:free)
+   - **Blue (bắt buộc):** [Liquid](https://www.liquid.ai/) — model cố định [`lfm3-1.7b`](https://api.liquid.ai/openai/v1/chat/completions)
    - **Red (chọn một provider):** [OpenAI](https://platform.openai.com/api-keys) (`gpt-4o-mini`) **hoặc** [Google AI Studio](https://aistudio.google.com/apikey) (`gemini-3.5-flash`)
 4. Đọc nhanh [`RULES.md`](RULES.md) và [`RUBRIC.md`](RUBRIC.md).
 
@@ -56,7 +56,7 @@ Bonus lab chỉ tính **một** trong hai: leak **Red** (B1, tối đa +5) hoặ
 
 | Agent                     | Provider / model                                                                     |
 | ------------------------- | ------------------------------------------------------------------------------------ |
-| **Blue**                  | OpenRouter `liquid/lfm-3-1.7b:free` (khóa cứng)                                         |
+| **Blue**                  | Liquid `lfm3-1.7b` (khóa cứng)                                         |
 | **Red** + **Red Advance** | Cùng provider: `gpt-4o-mini` **hoặc** `gemini-3.5-flash` (model mềm — điểm bắt buộc) |
 | Model khó (tuỳ chọn)      | `gpt-5.6-luna` / `gemini-3.8-flash` — **không** phải tên agent                       |
 
@@ -158,7 +158,44 @@ cp .env.example .env
 pip install -r requirements.txt
 ```
 
-Điền `.env`: `OPENROUTER_API_KEY` + `RED_TEAM_PROVIDER=openai|gemini` (và key tương ứng).  
+Điền `.env`: `LIQUID_API_KEY` + `RED_TEAM_PROVIDER=openai|gemini` (và key tương ứng).
 Rồi mở [`CHECKPOINTS.md`](CHECKPOINTS.md) và làm lần lượt Checkpoint 1 → 5.
+
+### Kiểm tra Blue bằng Liquid API
+
+Blue bắt buộc dùng Liquid API trực tiếp với model `lfm3-1.7b`.
+Đặt khóa thật vào `LIQUID_API_KEY` trong `.env`; không đưa khóa vào tài liệu hay commit.
+Python tự đọc `.env`. Khi dùng cURL, cần nạp biến môi trường vào shell trước.
+
+**macOS / Linux (bash):**
+
+```bash
+set -a
+source .env
+set +a
+curl https://api.liquid.ai/openai/v1/chat/completions \
+  -H "Authorization: Bearer $LIQUID_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "lfm3-1.7b",
+    "messages": [
+      {"role": "system", "content": "You are a helpful assistant."},
+      {"role": "user", "content": "Hello!"}
+    ]
+  }'
+```
+
+**Windows (PowerShell):**
+
+```powershell
+$liquidKeyLine = Get-Content .env | Where-Object { $_ -match '^LIQUID_API_KEY=' } | Select-Object -First 1
+$env:LIQUID_API_KEY = ($liquidKeyLine -split '=', 2)[1].Trim()
+$liquidBody = '{"model":"lfm3-1.7b","messages":[{"role":"system","content":"You are a helpful assistant."},{"role":"user","content":"Hello!"}]}'
+# Gửi JSON qua stdin để giữ nguyên dấu nháy trên Windows PowerShell.
+$liquidBody | curl.exe https://api.liquid.ai/openai/v1/chat/completions `
+  -H "Authorization: Bearer $env:LIQUID_API_KEY" `
+  -H "Content-Type: application/json" `
+  --data-binary '@-'
+```
 
 Nộp theo [`SUBMISSION.md`](SUBMISSION.md) · Quy định: [`RULES.md`](RULES.md).

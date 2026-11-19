@@ -11,6 +11,7 @@ Status convention (không dùng True/False mơ hồ):
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import Literal
 
 from google.genai import types
@@ -21,6 +22,35 @@ from core.config import ALLOWED_TOPICS, BLOCKED_TOPICS
 
 # Quyết định rõ ràng — tránh đảo nghĩa True/False
 InputStatus = Literal["ALLOW", "BLOCK"]
+
+_INJECTION_PATTERNS = tuple(
+    re.compile(rf"\b(?:{pattern})\b")
+    for pattern in (
+        r"ignore (?:all )?(?:(?:previous|prior|above) )?instructions",
+        r"you are now",
+        r"system prompt",
+        r"reveal (?:your |the )?(?:instructions|prompt)",
+        r"pretend (?:that )?you are",
+        r"act as (?:an? )?unrestricted",
+    )
+)
+
+
+def _normalize_input(text: str) -> str:
+    text = unicodedata.normalize("NFKC", text).casefold()
+    visible = "".join(char for char in text if unicodedata.category(char) != "Cf")
+    return " ".join(visible.split())
+
+
+def _topic_pattern(topics: list[str]) -> re.Pattern:
+    alternatives = "|".join(re.escape(topic) for topic in topics)
+    return re.compile(rf"\b(?:{alternatives})\b")
+
+
+_ALLOWED_TOPIC_PATTERN = _topic_pattern(
+    ALLOWED_TOPICS + ["transfers", "accounts", "transactions", "loans", "payments"]
+)
+_BLOCKED_TOPIC_PATTERN = _topic_pattern(BLOCKED_TOPICS)
 
 
 # ============================================================
@@ -51,16 +81,8 @@ def detect_injection(user_input: str) -> InputStatus:
     Returns:
         ``"BLOCK"`` if injection detected (chặn), ``"ALLOW"`` otherwise (cho qua).
     """
-    INJECTION_PATTERNS = [
-        # TODO: Add at least 5 regex patterns
-        # Example:
-        # r"ignore (all )?(previous|above) instructions",
-    ]
-
-    for pattern in INJECTION_PATTERNS:
-        if re.search(pattern, user_input, re.IGNORECASE):
-            return "BLOCK"
-    return "ALLOW"
+    normalized = _normalize_input(user_input)
+    return "BLOCK" if any(pattern.search(normalized) for pattern in _INJECTION_PATTERNS) else "ALLOW"
 
 
 # ============================================================
@@ -84,14 +106,15 @@ def topic_filter(user_input: str) -> InputStatus:
         ``"BLOCK"`` = chặn (off-topic hoặc topic cấm).
         ``"ALLOW"`` = cho qua (câu banking hợp lệ).
     """
-    input_lower = user_input.lower()
-
-    # TODO: Implement logic:
-    # 1. If input contains any blocked topic -> return "BLOCK"
-    # 2. If input doesn't contain any allowed topic -> return "BLOCK"
-    # 3. Otherwise -> return "ALLOW"
-
-    pass  # Replace with your implementation
+    normalized = _normalize_input(user_input)
+    # The configured Vietnamese topics use unaccented text.
+    normalized = "".join(
+        char for char in unicodedata.normalize("NFD", normalized)
+        if unicodedata.category(char) != "Mn"
+    ).replace("\u0111", "d")
+    if _BLOCKED_TOPIC_PATTERN.search(normalized):
+        return "BLOCK"
+    return "ALLOW" if _ALLOWED_TOPIC_PATTERN.search(normalized) else "BLOCK"
 
 
 # ============================================================
@@ -144,14 +167,13 @@ class InputGuardrailPlugin(base_plugin.BasePlugin):
         self.total_count += 1
         text = self._extract_text(user_message)
 
-        # TODO: Implement logic:
-        # 1. Call detect_injection(text)
-        #    - If "BLOCK": increment blocked_count, return self._block_response("...")
-        # 2. Call topic_filter(text)
-        #    - If "BLOCK": increment blocked_count, return self._block_response("...")
-        # 3. If both return "ALLOW": return None (let message through)
-
-        pass  # Replace with your implementation
+        if detect_injection(text) == "BLOCK":
+            self.blocked_count += 1
+            return self._block_response("Request blocked by input guardrail: prompt injection.")
+        if topic_filter(text) == "BLOCK":
+            self.blocked_count += 1
+            return self._block_response("Request blocked by input guardrail: banking topics only.")
+        return None
 
 
 # ============================================================

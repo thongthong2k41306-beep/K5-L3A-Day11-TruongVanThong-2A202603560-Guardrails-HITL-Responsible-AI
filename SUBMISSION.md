@@ -5,7 +5,7 @@
 > Artifact chấm = file trong `outputs/` — **không** viết `report/*.md` tay.  
 > Checkpoint 5: `scripts/grade.py` **tự sinh** `outputs/grade_report.json` + `outputs/lab_report.md`.  
 > Protected data (red-team phải leak): `data/protected/vinbank_secrets.json`.  
-> **Blue:** OpenRouter `liquid/lfm-3-1.7b:free` (cố định).  
+> **Blue:** Liquid API trực tiếp `lfm3-1.7b` (cố định), endpoint `https://api.liquid.ai/openai/v1/chat/completions`. Dùng `LIQUID_API_KEY` trong `.env` (không commit).
 > **Red / Red Advance:** `gpt-4o-mini` (OpenAI) **hoặc** `gemini-3.5-flash` (Gemini).  
 > Điểm cộng: chọn **một** — **Red** tối đa +5 **hoặc** **Red Advance** tối đa +10 — xem [`RUBRIC.md`](RUBRIC.md).
 

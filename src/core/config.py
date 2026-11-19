@@ -4,9 +4,9 @@ Lab 11 — Configuration, provider selection, API keys.
 Hai tầng model (không trộn):
 
   Blue Team (CP2–CP3, guardrails / pipeline / protected agent)
-    → CỐ ĐỊNH OpenRouter ``liquid/lfm-3-1.7b:free``
-       https://openrouter.ai/liquid/lfm-3-1.7b:free
-    → Cần ``OPENROUTER_API_KEY``
+    → CỐ ĐỊNH Liquid ``lfm3-1.7b``
+       https://api.liquid.ai/openai/v1/chat/completions
+    → Cần ``LIQUID_API_KEY``
 
   Red Team (CP4)
     → Chọn một provider: OpenAI hoặc Gemini
@@ -18,6 +18,7 @@ Hai tầng model (không trộn):
 from __future__ import annotations
 
 import os
+from getpass import getpass
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -32,13 +33,13 @@ except ImportError:
 # --- Providers ---
 PROVIDER_OPENAI = "openai"
 PROVIDER_GEMINI = "gemini"
-PROVIDER_OPENROUTER = "openrouter"
+PROVIDER_LIQUID = "liquid"
 
 # --- Blue Team (LOCKED) ---
-BLUE_PROVIDER = PROVIDER_OPENROUTER
-BLUE_MODEL = "liquid/lfm-3-1.7b:free"
-OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-DEFAULT_OPENROUTER_MODEL = BLUE_MODEL  # alias
+BLUE_PROVIDER = PROVIDER_LIQUID
+BLUE_MODEL = "lfm3-1.7b"
+LIQUID_BASE_URL = "https://api.liquid.ai/openai/v1"
+DEFAULT_LIQUID_MODEL = BLUE_MODEL
 
 # --- Red Team ---
 DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
@@ -96,7 +97,7 @@ except FileNotFoundError:
 
 
 # ---------------------------------------------------------------------------
-# Blue Team — fixed OpenRouter Liquid
+# Blue Team — fixed Liquid API
 # ---------------------------------------------------------------------------
 
 def get_blue_provider() -> str:
@@ -108,18 +109,15 @@ def get_blue_model() -> str:
     return BLUE_MODEL
 
 
-def get_openrouter_api_key() -> str:
-    return os.environ.get("OPENROUTER_API_KEY", "").strip()
+def get_liquid_api_key() -> str:
+    return os.environ.get("LIQUID_API_KEY", "").strip()
 
 
 def blue_client_kwargs() -> dict:
-    """OpenAI SDK kwargs pointing at OpenRouter (Blue Team only)."""
+    """OpenAI SDK kwargs pointing at Liquid (Blue Team only)."""
     return {
-        "api_key": get_openrouter_api_key() or None,
-        "base_url": (
-            os.environ.get("OPENROUTER_BASE_URL", OPENROUTER_BASE_URL).strip()
-            or OPENROUTER_BASE_URL
-        ),
+        "api_key": get_liquid_api_key() or None,
+        "base_url": LIQUID_BASE_URL,
     }
 
 
@@ -206,7 +204,7 @@ def uses_openai_sdk() -> bool:
 
 
 def openai_compatible_client_kwargs() -> dict:
-    """Default client kwargs = Red Team OpenAI (not Blue/OpenRouter)."""
+    """Default client kwargs = Red Team OpenAI (not Blue/Liquid)."""
     return red_openai_client_kwargs()
 
 
@@ -234,24 +232,27 @@ def is_harder_model() -> bool:
     return any(x in m for x in ("gpt-5.6", "pro", "gemini-3.8", "gemini-3.7"))
 
 
-def setup_api_key():
-    """Ensure keys for Blue (OpenRouter) + Red / Red Advance (OpenAI or Gemini)."""
-    if not get_openrouter_api_key():
-        os.environ["OPENROUTER_API_KEY"] = input(
-            "Enter OpenRouter API Key (Blue): "
+def setup_api_key(*, include_red: bool = True):
+    """Ensure keys for Blue (Liquid) + Red / Red Advance (OpenAI or Gemini)."""
+    if not get_liquid_api_key():
+        os.environ["LIQUID_API_KEY"] = getpass(
+            "Enter Liquid API Key (Blue): "
         ).strip()
     print(f"Blue  — {blue_provider_label()}  [LOCKED]")
+
+    if not include_red:
+        return
 
     red = get_red_provider()
     model = get_red_model()
     if red == PROVIDER_GEMINI:
         if not os.environ.get("GOOGLE_API_KEY", "").strip():
-            os.environ["GOOGLE_API_KEY"] = input("Enter Google API Key (Red): ").strip()
+            os.environ["GOOGLE_API_KEY"] = getpass("Enter Google API Key (Red): ").strip()
         os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "0"
         print(f"Red / Red Advance  — gemini:{model}")
     else:
         if not get_openai_api_key():
-            os.environ["OPENAI_API_KEY"] = input("Enter OpenAI API Key (Red): ").strip()
+            os.environ["OPENAI_API_KEY"] = getpass("Enter OpenAI API Key (Red): ").strip()
         print(f"Red / Red Advance  — openai:{model}")
 
     print(
